@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use Value::*;
 
 //create a structure for a dynamically typed dictionary
 #[derive(Debug, Clone)]
@@ -7,10 +8,11 @@ pub struct Dictionary {
 }
 //create a structure for a dynamically typed value
 #[derive(Debug, Clone)]
+#[allow(non_camel_case_types)]
 pub enum Value {
     Int(i32),
     Float(f64),
-    String(String),
+    string(String),
     Bool(bool),
     List(Vec<Value>),
     Dict(Dictionary),
@@ -71,7 +73,7 @@ impl Value {
         match self {
             Value::Int(_) => "int".to_string(),
             Value::Float(_) => "float".to_string(),
-            Value::String(_) => "string".to_string(),
+            Value::string(_) => "string".to_string(),
             Value::Bool(_) => "bool".to_string(),
             Value::List(_) => "list".to_string(),
             Value::Dict(_) => "dict".to_string(),
@@ -81,6 +83,7 @@ impl Value {
     pub fn as_int(&self) -> Option<i32> {
         match self {
             Value::Int(x) => Some(*x),
+            Value::string(x) => Some(x.parse::<i32>().unwrap_or(0)),
             _ => None,
         }
     }
@@ -94,7 +97,7 @@ impl Value {
     //get the value as a string
     pub fn as_string(&self) -> Option<String> {
         match self {
-            Value::String(x) => Some(x.to_string()),
+            Value::string(x) => Some(x.to_string()),
             _ => None,
         }
     }
@@ -129,7 +132,7 @@ impl Value {
     }
     //create a new string value
     pub fn new_string(x: String) -> Value {
-        Value::String(x)
+        Value::string(x)
     }
     //create a new boolean value
     pub fn new_bool(x: bool) -> Value {
@@ -210,13 +213,54 @@ impl Value {
         }
     }
 }
+//implement iterators for the dictionary
+impl<'a> IntoIterator for &'a Dictionary {
+    type Item = (&'a String, &'a Value);
+    type IntoIter = std::collections::hash_map::Iter<'a, String, Value>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.iter()
+    }
+}
+//macro to iterate over a dictionary whereby syntax is iter_dict!(for key, value in dict { ... })
+#[macro_export]
+macro_rules! iter_dict {
+    (for $key:ident and $value:ident in $dict:ident { $($body:tt)* }) => {
+        for ($key, $value) in &$dict {
+            $($body)*
+        }
+    };
+}
 
+#[macro_export]
 macro_rules! dict {
-    ($($key:expr => $value:expr),*) => {{
-        let mut dict = Dictionary::new();
+    ($($key:expr => $value:expr),*$(,)?) => {{
+        let mut dict = crate::Dictionary::new();
         $(
             dict.add($key, $value);
         )*
         dict
+    }};
+}
+
+impl std::ops::Add for Value {
+    type Output = Value;
+    fn add(self, other: Value) -> Value {
+        match (self, other) {
+            (Int(x), Int(y)) => Int(x + y),
+            (Float(x), Float(y)) => Float(x + y),
+            (string(x), string(y)) => string(x + &y),
+            (List(x), List(y)) => List([x, y].concat()),
+            _ => panic!("cannot add values of different types"),
+        }
+    }
+}
+#[macro_export]
+macro_rules! dict_map {
+    (|$key:ident and $value:ident| => $dict:ident { $($body:tt)* }) => {{
+        let mut new_dict = Dictionary::new();
+        for ($key, $value) in &$dict {
+            new_dict.add(&$key.to_string(), $($body)*);
+        }
+        new_dict
     }};
 }
